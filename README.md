@@ -16,11 +16,13 @@ Mesh geometry stays in the export's binary files and loads on demand, as it does
 
 ## Install
 
-From GitHub, pinned to a tag:
+From a GitHub release, as a tarball over HTTPS:
 
 ```bash
-npm install --save-dev github:acronita/babylon-scene-compiler#v0.1.0
+npm install --save-dev https://github.com/acronita/babylon-scene-compiler/archive/refs/tags/0.1.0.tar.gz
 ```
+
+The tarball form works on build machines without SSH keys, such as Cloudflare Workers Builds. A `github:acronita/babylon-scene-compiler#0.1.0` shorthand gets written to the lockfile as `git+ssh`.
 
 Requirements: Node 20+, Vite 6+, `@babylonjs/core` 9, a project made with Babylon.js Editor 5.5.
 
