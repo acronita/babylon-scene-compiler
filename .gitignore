@@ -1,0 +1,5 @@
+node_modules/
+# Output of the compiler when it is run on this folder by mistake
+.babylon-compiled/
+*.log
+.DS_Store

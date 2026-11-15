@@ -1,0 +1,51 @@
+{
+  "name": "babylon-scene-compiler",
+  "version": "0.1.0",
+  "description": "Compiles Babylon.js Editor scenes to plain Babylon.js code at build time, so builds ship without the editor runtime.",
+  "keywords": [
+    "babylonjs",
+    "babylonjs-editor",
+    "vite-plugin",
+    "scene",
+    "compiler",
+    "bundle-size"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/acronita/babylon-scene-compiler.git"
+  },
+  "homepage": "https://github.com/acronita/babylon-scene-compiler#readme",
+  "bugs": {
+    "url": "https://github.com/acronita/babylon-scene-compiler/issues"
+  },
+  "type": "module",
+  "private": true,
+  "bin": {
+    "babylon-scene-compiler": "./src/cli.mjs"
+  },
+  "exports": {
+    ".": "./src/project.mjs",
+    "./vite": "./src/vite.mjs",
+    "./compile": "./src/compile.mjs",
+    "./editor": "./editor/plugin.cjs"
+  },
+  "files": [
+    "src",
+    "editor"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "peerDependencies": {
+    "@babylonjs/core": ">=9",
+    "vite": ">=6"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
