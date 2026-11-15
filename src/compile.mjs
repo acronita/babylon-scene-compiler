@@ -51,6 +51,26 @@ export function compileScene(src, label, imports, fn, options = {}) {
   const C3 = (a) => `new ${use('Maths/math.color', 'Color3')}(${v(a)})`;
   const C4 = (a) => `new ${use('Maths/math.color', 'Color4')}(${v(a)})`;
   const V3 = (a) => `new ${use('Maths/math.vector', 'Vector3')}(${v(a)})`;
+  const V2 = (a) => `new ${use('Maths/math.vector', 'Vector2')}(${v(a)})`;
+  /** An inspector value of a script, as code: plain values as they are, colours and vectors as their classes. */
+  const scriptValue = (value, unsupported) => {
+    switch (value.type) {
+      case 'number':
+      case 'boolean':
+      case 'string':
+        return s(value.value);
+      case 'color3':
+        return C3(value.value);
+      case 'color4':
+        return C4(value.value);
+      case 'vector2':
+        return V2(value.value);
+      case 'vector3':
+        return V3(value.value);
+      default:
+        return unsupported();
+    }
+  };
   const L = [];
   let k = 0;
   const byRef = new Map(); // id / uniqueId → variable
@@ -308,8 +328,7 @@ export function compileScene(src, label, imports, fn, options = {}) {
     for (const script of scripts) {
       if (!script.enabled) continue;
       const values = Object.entries(script.values ?? {}).map(([key, value]) => {
-        if (!['number', 'boolean', 'string'].includes(value.type)) fail(`"${label}": script value ${script.key}.${key} of type ${value.type} is not supported`);
-        return `${s(key)}: ${s(value.value)}`;
+        return `${s(key)}: ${scriptValue(value, () => fail(`"${label}": script value ${script.key}.${key} of type ${value.type} is not supported`))}`;
       });
       L.push(`attach(${variable}, ${s(script.key)}, { ${values.join(', ')} });`);
     }

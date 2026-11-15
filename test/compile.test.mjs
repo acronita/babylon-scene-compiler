@@ -42,6 +42,22 @@ test('rebuilds names, ids, parents, materials, lights, camera and scripts', () =
   assert.ok(!code.includes('babylonFileLoader'));
 });
 
+test('script values of colour and vector types become their classes', () => {
+  const values = {
+    tint: { type: 'color3', value: [0.1, 0.2, 0.3] },
+    glow: { type: 'color4', value: [1, 0, 0, 0.5] },
+    offset: { type: 'vector3', value: [1, 2, 3] },
+    size: { type: 'vector2', value: [4, 5] },
+  };
+  const data = scene({ transformNodes: [{ id: 'n1', uniqueId: 1, name: 'Root', position: [0, 0, 0], scaling: [1, 1, 1], metadata: { scripts: [{ enabled: true, key: 'scripts/a.ts', values }] } }] });
+  const code = compileModule([{ file: 'a.babylon', data }], '// test');
+  assert.ok(
+    code.includes('attach(node0, "scripts/a.ts", { "tint": new Color3(0.1, 0.2, 0.3), "glow": new Color4(1, 0, 0, 0.5), "offset": new Vector3(1, 2, 3), "size": new Vector2(4, 5) })'),
+    'colour and vector values',
+  );
+  assert.match(code, /import \{[^}]*Vector2[^}]*\} from "@babylonjs\/core\/Maths\/math\.vector"/);
+});
+
 test('textures load with the scene unless lazyTextures', () => {
   const data = scene();
   data.materials[0].diffuseTexture = { name: 'assets/a.png', url: 'assets/a.png', hasAlpha: true, uScale: 2 };
