@@ -81,3 +81,7 @@ npm test
 ```
 
 The tests use Node's built-in test runner and have no dependencies.
+
+## License
+
+[MIT](LICENSE)
