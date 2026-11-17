@@ -80,6 +80,8 @@ Add it to the project's `project.bjseditor`, then reopen the project:
 
 A **Compiler** tab appears next to the inspector. Its **Compiled build** button exports the project (the same as File > Export), runs `npm run build` and shows the output in the tab and in the editor's console. If the tab can't be added, the plugin falls back to a floating button.
 
+The tab's **Version** field shows `version` from the project's `package.json`; edit it before a build and the plugin saves it there. After the build it zips the content of `dist/` (`index.html` at the zip root) into `builds/<name>-<platform>-<version>.zip`, ready to upload to a store. The platform comes from the build log line `[platform] target: <id>`, if the project prints one; without it, or for `local`, the name is `<name>-<version>.zip`. Zipping uses the system's bsdtar on Windows and macOS, and `zip` on Linux. Add `builds/` to the project's `.gitignore`.
+
 ## Fail loud
 
 When the compiler meets something it can't translate, it stops the build with an error that names it. A build that silently drops part of a scene is worse than no build.
