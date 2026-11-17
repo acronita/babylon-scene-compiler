@@ -77,3 +77,37 @@ test('fails loud on what it cannot translate', () => {
   ];
   for (const data of cases) assert.throws(() => compileModule([{ file: 'a.babylon', data }], '// test'), SceneCompileError);
 });
+
+test('GUI and JSON assets on scripts load before onStart', () => {
+  const values = { hud: { type: 'asset', value: 'assets/hud.gui' }, data: { type: 'asset', value: 'assets/levels.json' }, none: { type: 'asset', value: null } };
+  const data = scene({ transformNodes: [{ id: 'n1', uniqueId: 1, name: 'Root', position: [0, 0, 0], scaling: [1, 1, 1], metadata: { scripts: [{ enabled: true, key: 'scripts/a.ts', values }] } }] });
+  const code = compileModule([{ file: 'a.babylon', data }], '// test');
+  assert.ok(code.includes('attach(node0, "scripts/a.ts", { "hud": asset("gui", "assets/hud.gui"), "data": asset("json", "assets/levels.json"), "none": null })'));
+  assert.ok(code.includes('import { AdvancedDynamicTexture } from "@babylonjs/gui/2D/advancedDynamicTexture";'));
+  assert.ok(code.includes('gui.parseSerializedObject(data.content, false, (url: string) => rootUrl + url)'));
+  assert.ok(code.indexOf('await Promise.all(pending)') < code.indexOf('instance.onStart?.()'));
+  const plain = compileModule([{ file: 'a.babylon', data: scene() }], '// test');
+  assert.ok(!plain.includes('@babylonjs/gui'), 'no GUI import without GUI assets');
+  const bad = scene({ transformNodes: [{ id: 'n1', uniqueId: 1, name: 'Root', position: [0, 0, 0], metadata: { scripts: [{ enabled: true, key: 'scripts/a.ts', values: { s: { type: 'asset', value: 'assets/x.scene' } } }] } }] });
+  assert.throws(() => compileModule([{ file: 'a.babylon', data: bad }], '// test'), SceneCompileError);
+});
+
+test('re-encoded images replace texture URLs', () => {
+  const data = scene();
+  data.materials[0].diffuseTexture = { name: 'assets/a.png', url: 'assets/a.png' };
+  const code = compileModule([{ file: 'a.babylon', data }], '// test', { images: { 'assets/a.png': 'assets/a.webp' } });
+  assert.ok(code.includes('new Texture(rootUrl + "assets/a.webp"'));
+  assert.ok(code.includes('.name = "assets/a.png"'), 'texture name stays the editor one');
+});
+
+test('PBR clear coat is copied, other material plugins still fail', () => {
+  const data = scene();
+  data.materials[0] = { id: 'm1', uniqueId: 11, name: 'Skin', customType: 'BABYLON.PBRMaterial', albedo: [1, 0, 0], metallic: 0, roughness: 0.5,
+    plugins: { PBRClearCoatConfiguration: { isEnabled: true, intensity: 0.45, roughness: 0.23, indexOfRefraction: 1.5, useRoughnessFromMainTexture: true, isTintEnabled: false } } };
+  const code = compileModule([{ file: 'a.babylon', data }], '// test');
+  for (const expected of ['.clearCoat.isEnabled = true;', '.clearCoat.intensity = 0.45;', '.clearCoat.roughness = 0.23;', '.clearCoat.useRoughnessFromMainTexture = true;']) {
+    assert.ok(code.includes(expected), `missing: ${expected}`);
+  }
+  data.materials[0].plugins = { PBRSheenConfiguration: { isEnabled: true } };
+  assert.throws(() => compileModule([{ file: 'a.babylon', data }], '// test'), SceneCompileError);
+});

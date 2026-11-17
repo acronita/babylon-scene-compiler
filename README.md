@@ -45,6 +45,28 @@ export default defineConfig({
 | `outDir` | `.babylon-compiled` | Where the generated module goes; the folder gets its own `.gitignore` |
 | `lazyTextures` | `false` | A texture loads the first time a material that uses it is drawn, instead of with the scene |
 | `enabled` | on for `vite build` | `BABYLON_SCENE_COMPILER=off` turns it off for one build |
+| `images` | off | Re-encodes the images the scenes use in the build output (see below) |
+
+### Images
+
+```ts
+babylonSceneCompiler({ images: { format: 'webp', quality: 80, keepOriginals: false } })
+```
+
+The project keeps its lossless art; the build ships each PNG/JPEG that the scenes use (material textures and the images inside GUI assets assigned to scripts) as WebP or AVIF, when that makes the file at least 20% smaller. The generated code and the GUI files in the output point at the new files. Encoding uses [sharp](https://sharp.pixelplumbing.com) from the project (`npm install --save-dev sharp`) and is cached in `<outDir>/images`, so unchanged art isn't encoded again.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `format` | `webp` | `webp` or `avif` |
+| `quality` | `80` | Encoder quality |
+| `minBytes` | `16384` | Smaller images stay as they are |
+| `keepOriginals` | `true` | `false` deletes the original from the output, unless the project's own code names the file (a runtime image swap still needs it) |
+
+Images that code builds at runtime from a pattern (`` `icon-${n}.png` ``) aren't seen by the compiler: keep them small or convert them in the project.
+
+### Script assets
+
+Inspector values set with `@visibleAsAsset` load before `onStart`, as with the editor runtime: a `.gui` file becomes a fullscreen `AdvancedDynamicTexture` (image URLs resolve from the scene root), a `.json` file its parsed content. Other asset types stop the build.
 
 To compile without Vite, run `npx babylon-scene-compiler [project] [--scene name.babylon]`. It writes the module to `.babylon-compiled/`.
 
@@ -70,7 +92,9 @@ Not supported yet:
 - physics, LODs, instances and multi-materials;
 - post-process pipelines and spot lights;
 - inline geometry;
-- material textures other than diffuse, emissive and opacity (Standard) or albedo (PBR).
+- material textures other than diffuse, emissive and opacity (Standard) or albedo (PBR);
+- material plugins other than a textureless PBR clear coat;
+- script assets other than `.gui` (fullscreen) and `.json`.
 
 It also checks imports from `babylonjs-editor-tools`, and stops the build if one has no compiled equivalent.
 

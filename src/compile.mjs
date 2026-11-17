@@ -35,6 +35,13 @@ class Imports {
 }
 
 const CORE = '@babylonjs/core';
+const GUI_TEXTURE = '@babylonjs/gui/2D/advancedDynamicTexture';
+
+/** Kind of a script asset (`@visibleAsAsset`) from its file name, or null when it can't be compiled. */
+export function assetKind(file) {
+  const ext = String(file).split('.').pop().toLowerCase();
+  return ext === 'gui' ? 'gui' : ext === 'json' ? 'json' : null;
+}
 
 /**
  * Compiles one exported scene into the body of a function `(rootUrl, scene, attach) => Mesh[]`.
@@ -67,6 +74,14 @@ export function compileScene(src, label, imports, fn, options = {}) {
         return V2(value.value);
       case 'vector3':
         return V3(value.value);
+      case 'asset': {
+        // Loaded before onStart, like babylonjs-editor-tools' script asset preloading.
+        if (!value.value) return 'null';
+        const kind = assetKind(value.value);
+        if (!kind) return unsupported();
+        if (kind === 'gui') imports.use(GUI_TEXTURE, 'AdvancedDynamicTexture');
+        return `asset(${s(kind)}, ${s(value.value)})`;
+      }
       default:
         return unsupported();
     }
@@ -137,7 +152,9 @@ export function compileScene(src, label, imports, fn, options = {}) {
   const texture = (t, owner) => {
     if (!t) return null;
     if (t.isCube || t.isRenderTarget || t.customType) fail(`material "${owner}": texture "${t.name}" of this type is not supported`);
-    const url = t.url ?? t.name;
+    // options.images maps a scene-relative image path to its re-encoded file (e.g. .png → .webp).
+    const source = t.url ?? t.name;
+    const url = options.images?.[source] ?? source;
     const key = s(t);
     if (textures.has(key)) return textures.get(key);
     const variable = `tex${k++}`;
@@ -199,7 +216,28 @@ export function compileScene(src, label, imports, fn, options = {}) {
       fail(`material "${m.name}": type ${m.customType} is not supported`);
     }
     for (const [plugin, data] of Object.entries(m.plugins ?? {})) {
-      if (data?.isEnabled) fail(`material "${m.name}": plugin ${plugin} is not supported`);
+      if (!data?.isEnabled) continue;
+      if (plugin === 'PBRClearCoatConfiguration' && m.customType === 'BABYLON.PBRMaterial') {
+        // PBRMaterial creates its clearCoat configuration itself: copy the values, textureless only.
+        for (const key of ['texture', 'textureRoughness', 'bumpTexture', 'tintTexture']) {
+          if (data[key]) fail(`material "${m.name}": clear coat ${key} is not supported`);
+        }
+        const cc = (prop, value, code = value) => value !== undefined && value !== null && L.push(`${variable}.clearCoat.${prop} = ${code};`);
+        cc('isEnabled', true);
+        cc('intensity', data.intensity, n(data.intensity ?? 1));
+        cc('roughness', data.roughness, n(data.roughness ?? 0));
+        cc('indexOfRefraction', data.indexOfRefraction, n(data.indexOfRefraction ?? 1.5));
+        cc('useRoughnessFromMainTexture', data.useRoughnessFromMainTexture);
+        cc('remapF0OnInterfaceChange', data.remapF0OnInterfaceChange);
+        if (data.isTintEnabled) {
+          cc('isTintEnabled', true);
+          cc('tintColor', data.tintColor, C3(data.tintColor ?? [1, 1, 1]));
+          cc('tintColorAtDistance', data.tintColorAtDistance, n(data.tintColorAtDistance ?? 1));
+          cc('tintThickness', data.tintThickness, n(data.tintThickness ?? 1));
+        }
+        continue;
+      }
+      fail(`material "${m.name}": plugin ${plugin} is not supported`);
     }
     if (m.alpha !== undefined && m.alpha !== 1) set('alpha', n(m.alpha));
     if (m.backFaceCulling === false) set('backFaceCulling', 'false');
@@ -355,6 +393,16 @@ export function compileModule(scenes, header, options = {}) {
   imports.use(`${CORE}/Engines/constants`, 'Constants');
   imports.use(`${CORE}/Loading/sceneLoaderFlags`, 'SceneLoaderFlags');
   const functions = scenes.map((scene, i) => compileScene(scene.data, scene.file, imports, `scene${i}`, options));
+  // Same as babylonjs-editor-tools' GUI asset parser: project-relative image URLs resolve from rootUrl.
+  const createGui = imports.map.has(GUI_TEXTURE)
+    ? [
+      'function createGui(data: { name: string; content: unknown }, rootUrl: string, scene: Scene): unknown {',
+      '\tconst gui = AdvancedDynamicTexture.CreateFullscreenUI(data.name, true, scene);',
+      '\tgui.parseSerializedObject(data.content, false, (url: string) => rootUrl + url);',
+      '\treturn gui;',
+      '}',
+    ].join('\n')
+    : 'function createGui(): never {\n\tthrow new Error("[babylon-scene-compiler] no GUI asset was compiled into this build");\n}';
   const table = scenes.map((scene, i) => `\t${s(scene.file)}: scene${i},`).join('\n');
   return `${header}
 // Do not edit: change the scene in the Babylon.js Editor, export it, and build again.
@@ -366,6 +414,23 @@ ${imports.lines().join('\n')}
 type ScriptInstance = Record<string, unknown> & { onStart?(): void; onUpdate?(): void; onStop?(): void };
 type ScriptModule = { default?: new (object: unknown) => ScriptInstance };
 type Attach = (object: { onDisposeObservable: { addOnce(cb: () => void): void } }, key: string, values: Record<string, unknown>) => void;
+type AssetRef = { __asset: string; key: string };
+
+/** A script value that is a file (\`@visibleAsAsset\`): resolved in loadScene before onStart. */
+function asset(kind: string, key: string): AssetRef {
+\treturn { __asset: kind, key };
+}
+
+async function loadAsset(rootUrl: string, scene: Scene, ref: AssetRef): Promise<unknown> {
+\tconst response = await fetch(rootUrl + ref.key);
+\tif (!response.ok) throw new Error(\`[babylon-scene-compiler] asset \${ref.key}: HTTP \${response.status}\`);
+\tconst data = await response.json();
+\tif (ref.__asset !== "gui") return data;
+\tif (data.guiType !== "fullscreen") throw new Error(\`[babylon-scene-compiler] \${ref.key}: GUI type \${data.guiType} is not supported\`);
+\treturn createGui(data, rootUrl, scene);
+}
+
+${createGui}
 
 /** Geometry left in its own file until the mesh needs it, as the .babylon loader does. */
 function lazy(mesh: Mesh, file: string, binaryInfo: unknown, min: number[], max: number[], kinds: string[]): void {
@@ -399,10 +464,21 @@ export async function loadScene(rootUrl: string, sceneFilename: string, scene: S
 \tconst build = SCENES[sceneFilename];
 \tif (!build) throw new Error(\`[babylon-scene-compiler] scene "\${sceneFilename}" was not compiled into this build\`);
 \tconst started: ScriptInstance[] = [];
+\tconst assets = new Map<string, Promise<unknown>>();
+\tconst pending: Promise<void>[] = [];
 \tconst attach: Attach = (object, key, values) => {
 \t\tconst ctor = scriptsMap[key]?.default;
 \t\tif (!ctor) throw new Error(\`[babylon-scene-compiler] script \${key} is not in the scripts map\`);
-\t\tconst instance = Object.assign(new ctor(object), values);
+\t\tconst instance = new ctor(object);
+\t\tfor (const [name, value] of Object.entries(values)) {
+\t\t\tconst ref = value as AssetRef | null;
+\t\t\tif (!ref || typeof ref !== "object" || !("__asset" in ref)) {
+\t\t\t\tinstance[name] = value;
+\t\t\t\tcontinue;
+\t\t\t}
+\t\t\tif (!assets.has(ref.key)) assets.set(ref.key, loadAsset(rootUrl, scene, ref));
+\t\t\tpending.push(assets.get(ref.key)!.then((loaded) => { instance[name] = loaded; }));
+\t\t}
 \t\tstarted.push(instance);
 \t\tconst update = instance.onUpdate ? scene.onBeforeRenderObservable.add(() => instance.onUpdate!()) : null;
 \t\tobject.onDisposeObservable.addOnce(() => {
@@ -415,6 +491,7 @@ export async function loadScene(rootUrl: string, sceneFilename: string, scene: S
 \t\tfor (const mesh of meshes) mesh._checkDelayState();
 \t\twhile (!scene.isDisposed && meshes.some((mesh) => mesh.delayLoadState === Constants.DELAYLOADSTATE_LOADING)) await new Promise((r) => setTimeout(r, 16));
 \t}
+\tawait Promise.all(pending);
 \tawait new Promise<void>((resolve) => scene.executeWhenReady(() => resolve()));
 \tfor (const instance of started) instance.onStart?.();
 \toptions?.onProgress?.(1);
