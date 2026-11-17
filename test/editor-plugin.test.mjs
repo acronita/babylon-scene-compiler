@@ -39,7 +39,8 @@ test('zipDirectory puts the content of the folder at the zip root', async () => 
   const zip = join(root, 'builds', 'game-1.0.0.zip');
   await zipDirectory(dist, zip);
   assert.ok(existsSync(zip));
-  const list = execFileSync(process.platform === 'linux' ? 'unzip' : bsdtar(), process.platform === 'linux' ? ['-Z1', zip] : ['-tf', zip], { encoding: 'utf8' }).split(/\r?\n/).map((l) => l.replace(/^\.\//, '')).filter(Boolean);
+  const list = execFileSync(process.platform === 'linux' ? 'unzip' : bsdtar(), process.platform === 'linux' ? ['-Z1', zip] : ['-tf', zip], { encoding: 'utf8' }).split(/\r?\n/).filter(Boolean);
+  assert.ok(!list.some((l) => l.startsWith('./')), `no "./" prefix: ${list.join(', ')}`);
   assert.ok(list.includes('index.html'), `index.html at the root: ${list.join(', ')}`);
   assert.ok(list.some((l) => l.startsWith('assets/')));
 });

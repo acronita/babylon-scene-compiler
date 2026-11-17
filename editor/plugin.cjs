@@ -57,11 +57,13 @@ function bsdtar() {
 function zipDirectory(dir, zipPath) {
   if (existsSync(zipPath)) rmSync(zipPath);
   mkdirSync(dirname(zipPath), { recursive: true });
-  // bsdtar (Windows 10+, macOS) writes zip with -a; elsewhere fall back to Info-ZIP.
+  // bsdtar (Windows 10+, macOS) writes zip with -a; elsewhere fall back to Info-ZIP. The entries
+  // are listed by name (not ".") so the paths have no "./" prefix: "index.html", "assets/…".
+  const entries = readdirSync(dir);
   const [command, args, cwd] =
     process.platform === 'win32' || process.platform === 'darwin'
-      ? [bsdtar(), ['-a', '-c', '-f', zipPath, '-C', dir, '.'], undefined]
-      : ['zip', ['-r', '-q', zipPath, '.'], dir];
+      ? [bsdtar(), ['-a', '-c', '-f', zipPath, '-C', dir, ...entries], undefined]
+      : ['zip', ['-r', '-q', zipPath, ...entries], dir];
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { cwd });
     let errors = '';
