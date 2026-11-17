@@ -1,6 +1,6 @@
 {
   "name": "babylon-scene-compiler",
-  "version": "0.2.0",
+  "version": "0.3.2",
   "description": "Compiles Babylon.js Editor scenes to plain Babylon.js code at build time, so builds ship without the editor runtime.",
   "keywords": [
     "babylonjs",

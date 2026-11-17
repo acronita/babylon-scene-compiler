@@ -277,8 +277,10 @@ export function compileScene(src, label, imports, fn, options = {}) {
     const materialRefId = m.materialUniqueId ?? m.materialId;
     if (materialRefId !== undefined && materialRefId !== null) {
       const material = materialRef.get(materialRefId) ?? materialRef.get(m.materialId);
-      if (!material) fail(`mesh "${m.name}": material ${m.materialId} missing`);
-      L.push(`${variable}.material = ${material};`);
+      // Babylon's scene default material ("default material") is serialized only once the editor
+      // created it; a mesh can point to it before. No material renders with that same default.
+      if (!material && m.materialId !== 'default material') fail(`mesh "${m.name}": material ${m.materialId} missing`);
+      if (material) L.push(`${variable}.material = ${material};`);
     }
     if (m.delayLoadingFile) {
       const kinds = [];

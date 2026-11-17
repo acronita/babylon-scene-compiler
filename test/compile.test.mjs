@@ -111,3 +111,13 @@ test('PBR clear coat is copied, other material plugins still fail', () => {
   data.materials[0].plugins = { PBRSheenConfiguration: { isEnabled: true } };
   assert.throws(() => compileModule([{ file: 'a.babylon', data }], '// test'), SceneCompileError);
 });
+
+test("a mesh on the scene's default material compiles without it when the export left it out", () => {
+  // The editor serializes "default material" only once it created it; an empty mesh can point to it before.
+  const mesh = { id: 'p', uniqueId: 5, name: 'PlatformPoki', position: [0, 0, 0], materialId: 'default material', materialUniqueId: 1122 };
+  const code = compileModule([{ file: 'a.babylon', data: scene({ meshes: [mesh] }) }], '// test');
+  assert.ok(code.includes('new Mesh("PlatformPoki", scene)'));
+  assert.ok(!code.includes('.material = undefined'));
+  // Any other missing material still fails loud.
+  assert.throws(() => compileModule([{ file: 'a.babylon', data: scene({ meshes: [{ ...mesh, materialId: 'gone', materialUniqueId: 9 }] }) }], '// test'), SceneCompileError);
+});
