@@ -26,7 +26,10 @@
   },
   "exports": {
     ".": "./src/project.mjs",
-    "./vite": "./src/vite.mjs",
+    "./vite": {
+      "types": "./src/vite.d.mts",
+      "default": "./src/vite.mjs"
+    },
     "./compile": "./src/compile.mjs",
     "./editor": "./editor/plugin.cjs"
   },
